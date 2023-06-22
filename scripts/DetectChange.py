@@ -1,4 +1,6 @@
 import argparse
+import os
+from tqdm import tqdm
 #Parse argument
 ap = argparse.ArgumentParser()
 ap.add_argument("-io", "--input_image_one", required = True,
@@ -62,7 +64,7 @@ def find_FVS(EVS, diff_image, mean_vec, new):
  
     FVS = np.dot(feature_vector_set, EVS)
     FVS = FVS - mean_vec
-    print ("[INFO] Feature vector space size", FVS.shape)
+    # print ("[INFO] Feature vector space size", FVS.shape)
     return FVS
 
 def clustering(FVS, components, new):
@@ -75,75 +77,80 @@ def clustering(FVS, components, new):
     change_map  = np.reshape(output,(new[1] - 4, new[0] - 4))
     return least_index, change_map
     
+dirs = os.listdir("/content/dataset/after")
 
-# Read Images
-print('[INFO] Reading Images ...')
-start = time.time()
-image1 = cv2.imread(image1_path)
-image2 = cv2.imread(image2_path)
-end = time.time()
-print('[INFO] Reading Images took {} seconds'.format(end-start))
-
-
-# Resize Images
-print('[INFO] Resizing Images ...')
-start = time.time()
-new_size = np.asarray(image1.shape) /5
-new_size = new_size.astype(int) *5
-image1 = cv2.resize(image1, (new_size[0],new_size[1])).astype(int)
-image2 = cv2.resize(image2, (new_size[0],new_size[1])).astype(int)
-end = time.time()
-print('[INFO] Resizing Images took {} seconds'.format(end-start))
-
-# Difference Image
-print('[INFO] Computing Difference Image ...')
-start = time.time()
-diff_image = abs(image1 - image2)
-cv2.imwrite(out_dir+'difference.jpg', diff_image)
-end = time.time()
-print('[INFO] Computing Difference Image took {} seconds'.format(end-start))
-diff_image=diff_image[:,:,1]
+for n, i in enumerate(tqdm(dirs)):
+  image1_path_A = os.path.join(image1_path, i)
+  image1_path_B = os.path.join(image2_path, i)
+  # Read Images
+  # print('[INFO] Reading Images ...')
+  start = time.time()
+  image1 = cv2.imread(image1_path_A)
+  image2 = cv2.imread(image1_path_B)
+  end = time.time()
+  # print('[INFO] Reading Images took {} seconds'.format(end-start))
 
 
+  # Resize Images
+  # print('[INFO] Resizing Images ...')
+  start = time.time()
+  new_size = np.asarray(image1.shape) /5
+  new_size = new_size.astype(int) *5
+  image1 = cv2.resize(image1, (new_size[0],new_size[1])).astype(int)
+  image2 = cv2.resize(image2, (new_size[0],new_size[1])).astype(int)
+  end = time.time()
+  # print('[INFO] Resizing Images took {} seconds'.format(end-start))
 
-print('[INFO] Performing PCA ...')
-start = time.time()
-pca = PCA()
-vector_set, mean_vec=find_vector_set(diff_image, new_size)
-pca.fit(vector_set)
-EVS = pca.components_
-end = time.time()
-print('[INFO] Performing PCA took {} seconds'.format(end-start))
+  # Difference Image
+  # print('[INFO] Computing Difference Image ...')
+  start = time.time()
+  diff_image = abs(image1 - image2)
+  cv2.imwrite(out_dir+f'difference_{i}', diff_image)
 
-print('[INFO] Building Feature Vector Space ...')
-start = time.time()
-FVS = find_FVS(EVS, diff_image, mean_vec, new_size)
-components = 3
-end = time.time()
-print('[INFO] Building Feature Vector Space took {} seconds'.format(end-start))
+  end = time.time()
+  # print('[INFO] Computing Difference Image took {} seconds'.format(end-start))
+  diff_image=diff_image[:,:,1]
 
-print('[INFO] Clustering ...')
-start = time.time()
-least_index, change_map = clustering(FVS, components, new_size)
-end = time.time()
-print('[INFO] Clustering took {} seconds'.format(end-start))
 
-change_map[change_map == least_index] = 255
-change_map[change_map != 255] = 0
-change_map = change_map.astype(np.uint8)
 
-print('[INFO] Save Change Map ...')
-cv2.imwrite(out_dir+'ChangeMap.jpg', change_map)
+  # print('[INFO] Performing PCA ...')
+  start = time.time()
+  pca = PCA()
+  vector_set, mean_vec=find_vector_set(diff_image, new_size)
+  pca.fit(vector_set)
+  EVS = pca.components_
+  end = time.time()
+  # print('[INFO] Performing PCA took {} seconds'.format(end-start))
 
-print('[INFO] Performing Closing ...')
-print('[WARNING] Kernel is fixed depending on image topology')
-print('[WARNING] Closing with disk-shaped structuring element with radius equal to 6')
-kernel = skimage.morphology.disk(6)
-CloseMap = cv2.morphologyEx(change_map, cv2.MORPH_CLOSE, kernel)
-cv2.imwrite(out_dir+'CloseMap.jpg', CloseMap)
+  # print('[INFO] Building Feature Vector Space ...')
+  start = time.time()
+  FVS = find_FVS(EVS, diff_image, mean_vec, new_size)
+  components = 3
+  end = time.time()
+  # print('[INFO] Building Feature Vector Space took {} seconds'.format(end-start))
 
-print('[INFO] Performing Opening ...')
-OpenMap = cv2.morphologyEx(CloseMap, cv2.MORPH_OPEN, kernel)
-cv2.imwrite(out_dir+'OpenMap.jpg', OpenMap)
+  # print('[INFO] Clustering ...')
+  start = time.time()
+  least_index, change_map = clustering(FVS, components, new_size)
+  end = time.time()
+  # print('[INFO] Clustering took {} seconds'.format(end-start))
+
+  change_map[change_map == least_index] = 255
+  change_map[change_map != 255] = 0
+  change_map = change_map.astype(np.uint8)
+
+  # print('[INFO] Save Change Map ...')
+  cv2.imwrite(out_dir+f"ChangeMap_{i}", change_map)
+
+  # print('[INFO] Performing Closing ...')
+  # print('[WARNING] Kernel is fixed depending on image topology')
+  # print('[WARNING] Closing with disk-shaped structuring element with radius equal to 6')
+  kernel = skimage.morphology.disk(6)
+  CloseMap = cv2.morphologyEx(change_map, cv2.MORPH_CLOSE, kernel)
+  cv2.imwrite(out_dir+f'CloseMap_{i}', CloseMap)
+
+  # print('[INFO] Performing Opening ...')
+  OpenMap = cv2.morphologyEx(CloseMap, cv2.MORPH_OPEN, kernel)
+  cv2.imwrite(out_dir+f'OpenMap_{i}', OpenMap)
 
 print('[INFO] End Change Detection')
